@@ -6,18 +6,26 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.Key;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
+import java.security.cert.CertPath;
+import java.security.cert.CertPathValidator;
+import java.security.cert.CertPathValidatorException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.CertificateParsingException;
+import java.security.cert.PKIXParameters;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateCrtKey;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,6 +36,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import de.mklinger.micro.keystores.KeyStores;
+import de.mklinger.micro.keystores.KeyStores.UncheckedSecurityException;
 
 public class CertificateBuilderTest {
 	@Rule
@@ -304,5 +313,63 @@ public class CertificateBuilderTest {
 			}
 		}
 		fail("Missing expected SAN of type " + expectedType + " with value '" + expectedValue + "'");
+	}
+
+	@Test
+	public void validateChain() throws CertificateException, KeyStoreException, InvalidAlgorithmParameterException, CertPathValidatorException, NoSuchAlgorithmException {
+		final CertificateAndKeyPair caRootCertificateAndKeyPair = new CertificateBuilder()
+				.ca()
+				.subjectCn("test-javagenerated-ca-root")
+				.validDays(365)
+				.keySize(1024) // speed things up
+				.build();
+
+		final CertificateAndKeyPair caIntermediateCertificateAndKeyPair = new CertificateBuilder()
+				.ca()
+				.subjectCn("test-javagenerated-ca-intermediate")
+				.validDays(365)
+				.keySize(1024) // speed things up
+				.issuer(caRootCertificateAndKeyPair)
+				.build();
+
+		final CertificateAndKeyPair certificateAndKeyPair = new CertificateBuilder()
+				.subjectCn("test-javagenerated-certificate")
+				.validDays(365)
+				.keySize(1024) // speed things up
+				.issuer(caIntermediateCertificateAndKeyPair)
+				.serverAuth(true)
+				.clientAuth(true)
+				.ipSan("127.0.0.1")
+				.dnsSan("mklinger.de")
+				.build();
+
+		final CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+		final CertPath certPath = certificateFactory.generateCertPath(Arrays.asList(
+				certificateAndKeyPair.getCertificate(),
+				caIntermediateCertificateAndKeyPair.getCertificate(),
+				caRootCertificateAndKeyPair.getCertificate()));
+
+		final PKIXParameters pkixParameters = new PKIXParameters(newTrustStore(caRootCertificateAndKeyPair.getCertificate()));
+		pkixParameters.setRevocationEnabled(false);
+
+		final CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
+		cpv.validate(certPath, pkixParameters);
+	}
+
+	private static KeyStore newTrustStore(final Certificate certificate) {
+		try {
+
+			final KeyStore store = KeyStore.getInstance("PKCS12");
+			store.load(null, null);
+
+			store.setCertificateEntry("cert", certificate);
+
+			return store;
+
+		} catch (final IOException e) {
+			throw new UncheckedIOException("Error creating trust store", e);
+		} catch (KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
+			throw new UncheckedSecurityException("Error creating trust store", e);
+		}
 	}
 }

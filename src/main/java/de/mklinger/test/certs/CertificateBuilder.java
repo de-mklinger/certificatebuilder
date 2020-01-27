@@ -46,6 +46,7 @@ public class CertificateBuilder {
 	private int keySize = DEFAULT_KEY_SIZE;
 	private final Supplier<BigInteger> serialFactory = new DefaultSerialSupplier();
 	private CertificateAndKeyPair issuer;
+	private boolean ca;
 	private boolean serverAuth;
 	private boolean clientAuth;
 	private List<String> ipSans;
@@ -194,6 +195,23 @@ public class CertificateBuilder {
 	}
 
 	/**
+	 * Enable the resulting certificate to act as a CA certificate (i.e. sign other
+	 * certificates).
+	 */
+	public CertificateBuilder ca() {
+		return ca(true);
+	}
+
+	/**
+	 * When set to true, the resulting certificate can act as a CA certificate (i.e.
+	 * sign other certificates).
+	 */
+	public CertificateBuilder ca(final boolean ca) {
+		this.ca = ca;
+		return this;
+	}
+
+	/**
 	 * Set validity in days. Default is {@value #DEFAULT_VALID_DAYS}.
 	 */
 	public CertificateBuilder validDays(final int validDays) {
@@ -276,34 +294,6 @@ public class CertificateBuilder {
 	 * Generate keys and certificate.
 	 */
 	public CertificateAndKeyPair build() {
-		if (issuer != null || haveExtensions()) {
-			return buildV3();
-		} else {
-			return buildV1();
-		}
-	}
-
-	private boolean haveExtensions() {
-		return serverAuth || clientAuth ||
-				(ipSans != null && !ipSans.isEmpty()) ||
-				(dnsSans != null && !dnsSans.isEmpty());
-	}
-
-	private CertificateAndKeyPair buildV1() {
-		final KeyPair keyPair = BouncyCastleImpl.generateRSAKeyPair(keySize);
-
-		final X509CertificateHolder certificateHolder = BouncyCastleImpl.generateV1Certificate(
-				keyPair,
-				getSubject(),
-				serialFactory.get(),
-				validDays);
-
-		final Certificate certificate = BouncyCastleImpl.toJcaCertificate(certificateHolder);
-
-		return new CertificateAndKeyPair(certificateHolder, certificate, keyPair);
-	}
-
-	private CertificateAndKeyPair buildV3() {
 		final KeyPair keyPair = BouncyCastleImpl.generateRSAKeyPair(keySize);
 
 		X509CertificateHolder issuerCertificateHolder;
@@ -318,13 +308,19 @@ public class CertificateBuilder {
 				keyPair,
 				getSubject(),
 				serialFactory.get(),
-				validDays);
+				validDays,
+				ca);
 
 		BouncyCastleImpl.addAuthExtension(certBuilder, serverAuth, clientAuth);
 
 		BouncyCastleImpl.addSanExtension(certBuilder, ipSans, dnsSans);
 
-		final ContentSigner contentSigner = BouncyCastleImpl.contentSigner(keyPair.getPrivate());
+		final ContentSigner contentSigner;
+		if (issuer == null) {
+			contentSigner = BouncyCastleImpl.contentSigner(keyPair.getPrivate());
+		} else {
+			contentSigner = BouncyCastleImpl.contentSigner(issuer.getKeyPair().getPrivate());
+		}
 		final X509CertificateHolder certificateHolder = certBuilder.build(contentSigner);
 
 		final Certificate certificate = BouncyCastleImpl.toJcaCertificate(certificateHolder);

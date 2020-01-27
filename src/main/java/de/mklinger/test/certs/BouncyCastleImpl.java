@@ -30,7 +30,6 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.CertIOException;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509ExtensionUtils;
-import org.bouncycastle.cert.X509v1CertificateBuilder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
@@ -124,7 +123,7 @@ class BouncyCastleImpl {
 
 			final Extension extension = new Extension(
 					Extension.extendedKeyUsage,
-					true,
+					false,
 					new ExtendedKeyUsage(keyPurposeIds.toArray(KeyPurposeId[]::new)).getEncoded());
 
 			certBuilder.addExtension(extension);
@@ -139,22 +138,6 @@ class BouncyCastleImpl {
 		final KeyPairGenerator kpGen = KeyPairGenerator.getInstance("RSA", "BC");
 		kpGen.initialize(keySize, secureRandom());
 		return kpGen.generateKeyPair();
-	}
-
-	static X509CertificateHolder generateV1Certificate(final KeyPair keyPair, final X500Name issuerAndSubject, final BigInteger serial, final int days) {
-		return wrapExceptions(() -> doGenerateV1Certificate(keyPair, issuerAndSubject, serial, days));
-	}
-
-	private static X509CertificateHolder doGenerateV1Certificate(final KeyPair keyPair, final X500Name issuerAndSubject, final BigInteger serial, final int days) throws OperatorCreationException {
-		final Date notBefore = new Date();
-		final Date notAfter = Date.from(ZonedDateTime.now().plusDays(days).toInstant());
-
-		final SubjectPublicKeyInfo subjectPublicKeyInfo = subjectPublicKeyInfo(keyPair.getPublic());
-
-		final ContentSigner contentSigner = contentSigner(keyPair.getPrivate());
-
-		return new X509v1CertificateBuilder(issuerAndSubject, serial, notBefore, notAfter, issuerAndSubject, subjectPublicKeyInfo)
-				.build(contentSigner);
 	}
 
 	private static SubjectPublicKeyInfo subjectPublicKeyInfo(final PublicKey publicKey) {
@@ -182,12 +165,12 @@ class BouncyCastleImpl {
 	}
 
 	static X509v3CertificateBuilder baseCertBuilder(@Nullable final X509CertificateHolder rootCert, final KeyPair keyPair,
-			final X500Name subject, final BigInteger serial, final int days) {
-		return wrapExceptions(() -> doBaseCertBuilder(rootCert, keyPair, subject, serial, days));
+			final X500Name subject, final BigInteger serial, final int days, final boolean ca) {
+		return wrapExceptions(() -> doBaseCertBuilder(rootCert, keyPair, subject, serial, days, ca));
 	}
 
 	private static X509v3CertificateBuilder doBaseCertBuilder(@Nullable final X509CertificateHolder rootCert, final KeyPair keyPair,
-			final X500Name subject, final BigInteger serial, final int days)
+			final X500Name subject, final BigInteger serial, final int days, final boolean ca)
 					throws NoSuchAlgorithmException, CertIOException {
 
 		final Date notBefore = new Date();
@@ -213,8 +196,15 @@ class BouncyCastleImpl {
 
 		certBuilder
 		.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(subjectPublicKeyInfo))
-		.addExtension(Extension.basicConstraints, true, new BasicConstraints(false))
-		.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+		.addExtension(Extension.basicConstraints, false, new BasicConstraints(ca));
+
+		if (ca) {
+			certBuilder
+			.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign | KeyUsage.cRLSign));
+		} else {
+			certBuilder
+			.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment | KeyUsage.keyAgreement));
+		}
 
 		return certBuilder;
 	}

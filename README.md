@@ -35,10 +35,12 @@ Create CA root certificate, intermediated certificate and signed certificate:
 ```java
 CertificateAndKeyPair root = new CertificateBuilder()
     .subjectCn("ca-root")
+    .ca()
     .build();
 
 CertificateAndKeyPair intermediate = new CertificateBuilder()
     .subjectCn("ca-intermediate")
+    .ca()
     .validDays(365)
     .issuer(root)
     .build();
