@@ -34,6 +34,32 @@ public class CertificateBuilderTest {
 	public TemporaryFolder tmp = new TemporaryFolder();
 
 	@Test
+	public void testSubject1() {
+		final String subject = new CertificateBuilder()
+				.subjectC("c")
+				.subjectCn("cn")
+				.subjectL("l")
+				.subjectO("o")
+				.subjectOu("ou")
+				.subjectSt("st")
+				.subjectStreet("street")
+				.subjectT("t")
+				.subject("0.9.2342.19200300.100.1.1", "uid")
+				.getSubject().toString();
+
+		assertThat(subject, is("C=c,CN=cn,L=l,O=o,OU=ou,ST=st,STREET=street,T=t,UID=uid"));
+	}
+
+	@Test
+	public void testSubject2() {
+		final String subject = new CertificateBuilder()
+				.subject("C=c,CN=cn,L=l,O=o,OU=ou,ST=st,STREET=street,T=t,UID=uid")
+				.getSubject().toString();
+
+		assertThat(subject, is("C=c,CN=cn,L=l,O=o,OU=ou,ST=st,STREET=street,T=t,UID=uid"));
+	}
+
+	@Test
 	public void testSelfSigned() throws IOException, UnrecoverableKeyException, KeyStoreException, NoSuchAlgorithmException, CertificateException {
 		final CertificateAndKeyPair certificateAndKeyPair = new CertificateBuilder()
 				.subjectCn("test-javagenerated-ca")
