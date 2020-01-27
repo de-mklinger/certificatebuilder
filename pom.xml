@@ -9,7 +9,7 @@
 	
 	<groupId>de.mklinger.commons</groupId>
 	<artifactId>certificatebuilder</artifactId>
-	<version>1.0</version>
+	<version>1.1-SNAPSHOT</version>
 
 	<name>${project.artifactId}</name>
 	<description>Simple Builder API for X509 certificates using Bouncy Castle</description>
@@ -41,7 +41,7 @@
 		<connection>scm:git:git@github.com:de-mklinger/certificatebuilder.git</connection>
 		<developerConnection>scm:git:git@github.com:de-mklinger/certificatebuilder.git</developerConnection>
 		<url>https://github.com/de-mklinger/certificatebuilder</url>
-		<tag>certificatebuilder-1.0</tag>
+		<tag>HEAD</tag>
 	</scm>
 
 	<properties>
